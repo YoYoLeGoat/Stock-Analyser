@@ -777,7 +777,7 @@ async function analyze(ticker){
   document.getElementById("ticker-input").value=t;
   ["analyzer-welcome","analyzer-error","analyzer-result"].forEach(id=>document.getElementById(id).style.display="none");
   const loadEl=document.getElementById("analyzer-loading");
-  loadEl.innerHTML='<div style="font-size:30px;display:inline-block;animation:pulse 1s ease-in-out infinite">📊</div><div class="syne" style="color:#06b6d4;font-weight:700;font-size:13px;margin-top:8px">Récupération du prix en temps réel...</div>';
+ loadEl.innerHTML='<div style="font-size:30px;display:inline-block;animation:pulse 1s ease-in-out infinite">📊</div><div class="syne" style="color:#06b6d4;font-weight:700;font-size:13px;margin-top:8px">Récupération du prix en temps réel...</div>';
   loadEl.style.display="block";
   const d=STOCKS[t];
   if(!d){
