@@ -742,26 +742,79 @@ function switchTab(t){
   if(t==="glossary")renderGlossary();
 }
 
+// ── PRIX EN TEMPS RÉEL ──
+async function fetchLivePrice(ticker){
+  try{
+    const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d`;
+    const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const resp=await fetch(proxy,{signal:AbortSignal.timeout(7000)});
+    if(!resp.ok)return null;
+    const json=await resp.json();
+    const data=JSON.parse(json.contents);
+    const meta=data?.chart?.result?.[0]?.meta;
+    if(!meta)return null;
+    const livePrice=meta.regularMarketPrice;
+    const closePrice=meta.previousClose||meta.chartPreviousClose;
+    const now=Date.now()/1000;
+    const sec=meta.regularMarketTime?(now-meta.regularMarketTime):99999;
+    const isLive=sec<3600*5;
+    const price=livePrice||closePrice;
+    if(!price)return null;
+    const mcap=meta.marketCap?(meta.marketCap/1e9):null;
+    let closeLabel="";
+    if(meta.regularMarketTime){
+      const d=new Date(meta.regularMarketTime*1000);
+      const o1={weekday:"short",day:"2-digit",month:"short"};
+      const o2={hour:"2-digit",minute:"2-digit"};
+      closeLabel=d.toLocaleDateString("fr-FR",o1)+" "+d.toLocaleTimeString("fr-FR",o2);
+    }
+    return{
+      price:parseFloat(parseFloat(price).toFixed(2)),
+      mcap:mcap?parseFloat(mcap.toFixed(1)):null,
+      currency:meta.currency||null,
+      isLive:isLive,
+      closeLabel:closeLabel
+    };
+  }catch(e){return null;}
+}
+
 // ── ANALYZER ──
-function analyze(ticker){
+async function analyze(ticker){
   const t=(ticker||document.getElementById("ticker-input").value).trim().toUpperCase();
   if(!t)return;
   document.getElementById("ticker-input").value=t;
-  ["analyzer-welcome","analyzer-error","analyzer-result"].forEach(id=>document.getElementById(id).style.display="none");
-  document.getElementById("analyzer-loading").style.display="block";
-  setTimeout(()=>{
-    document.getElementById("analyzer-loading").style.display="none";
-    const d=STOCKS[t];
-    if(d){
-      const el=document.getElementById("analyzer-result");
-      el.innerHTML=buildResultHTML(t,d,true);
-      el.style.display="block";
-    } else {
-      const e=document.getElementById("analyzer-error");
-      e.innerHTML=`<div style="color:#fca5a5;font-weight:700;font-size:12px;margin-bottom:3px">❌ "${t}" non disponible</div><div style="color:#475569;font-size:11px">💡 Utilisez le Glossaire pour trouver le bon ticker.</div>`;
-      e.style.display="block";
-    }
-  },700);
+  const panels=["analyzer-welcome","analyzer-error","analyzer-result"];
+  panels.forEach(id=>document.getElementById(id).style.display="none");
+  const loadEl=document.getElementById("analyzer-loading");
+  loadEl.innerHTML="<div style='font-size:30px;display:inline-block;animation:pulse 1s ease-in-out infinite'>📊</div>"
+    +"<div class='syne' style='color:#06b6d4;font-weight:700;font-size:13px;margin-top:8px'>"
+    +"R\u00e9cup\u00e9ration du prix en temps r\u00e9el...</div>";
+  loadEl.style.display="block";
+  const d=STOCKS[t];
+  if(!d){
+    loadEl.style.display="none";
+    const e=document.getElementById("analyzer-error");
+    e.innerHTML="<div style='color:#fca5a5;font-weight:700;font-size:12px;margin-bottom:3px'>"
+      +"❌ \""+t+"\" non disponible</div>"
+      +"<div style='color:#475569;font-size:11px'>💡 Utilisez le Glossaire pour trouver le bon ticker.</div>";
+    e.style.display="block";
+    return;
+  }
+  const live=await fetchLivePrice(t);
+  if(live&&live.price){
+    d.price=live.price;
+    if(live.mcap)d.mcap=live.mcap;
+    if(live.currency)d.cur=live.currency;
+    d._live=live.isLive;
+    d._closeLabel=live.closeLabel;
+    d._priceUpdated=true;
+  } else {
+    d._priceUpdated=false;
+  }
+  loadEl.style.display="none";
+  const el=document.getElementById("analyzer-result");
+  el.innerHTML=buildResultHTML(t,d,true);
+  el.style.display="block";
 }
 
 // ── COMPARATEUR ──
